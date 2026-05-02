@@ -20,4 +20,4 @@ app = web.Application()
 app.router.add_get('/', handle)
 
 def start_web_server():
-    web.run_app(app, host='127.0.0.1', port=port)
+    web.run_app(app, host='127.0.0.1', port=port, handle_signals=False)
