@@ -53,28 +53,35 @@ async def bot_start(message: types.Message, state: FSMContext):
 
 async def _handle_authenticated_user(message, state, token, date, username):
     chat_id = message.from_user.id
+    access = None
     log.info("[auth_user] step=djtoken_request chat_id=%s", chat_id)
-    get_djtoken = await send_req.djtoken(username=USERNAME, password=PASSWORD)
-    access = get_djtoken.get('access')
-    log.info("[auth_user] step=djtoken_got chat_id=%s has_access=%s", chat_id, bool(access))
+    try:
+        get_djtoken = await send_req.djtoken(username=USERNAME, password=PASSWORD)
+        access = get_djtoken.get('access')
+        log.info("[auth_user] step=djtoken_got chat_id=%s has_access=%s", chat_id, bool(access))
+    except Exception as e:
+        log.warning("[auth_user] step=djtoken_failed chat_id=%s err=%s", chat_id, e)
     await state.update_data(access=access)
     user_chat_id = message.from_user.id
 
-    try:
-        log.info("[auth_user] step=create_user_profile chat_id=%s", chat_id)
-        send_req.create_user_profile(
-            token=access,
-            chat_id=user_chat_id,
-            first_name=message.from_user.first_name,
-            last_name=message.from_user.last_name,
-            pin=1,
-            date=date,
-            username=username,
-            university_name=int(UNIVERSITY_ID),
-        )
-        log.info("[auth_user] step=create_user_profile_done chat_id=%s", chat_id)
-    except Exception as e:
-        log.warning("[auth_user] step=create_user_profile_failed chat_id=%s err=%s", chat_id, e)
+    if access:
+        try:
+            log.info("[auth_user] step=create_user_profile chat_id=%s", chat_id)
+            send_req.create_user_profile(
+                token=access,
+                chat_id=user_chat_id,
+                first_name=message.from_user.first_name,
+                last_name=message.from_user.last_name,
+                pin=1,
+                date=date,
+                username=username,
+                university_name=int(UNIVERSITY_ID),
+            )
+            log.info("[auth_user] step=create_user_profile_done chat_id=%s", chat_id)
+        except Exception as e:
+            log.warning("[auth_user] step=create_user_profile_failed chat_id=%s err=%s", chat_id, e)
+    else:
+        log.info("[auth_user] step=skipping_create_user_profile (no access token) chat_id=%s", chat_id)
 
     log.info("[auth_user] step=my_applications_request chat_id=%s", chat_id)
     exam_info = await send_req.my_applications(token=token)
@@ -99,28 +106,36 @@ async def _handle_new_user(message, state, date, username):
     chat_id = message.from_user.id
     log.info("[new_user] step=state_finish chat_id=%s", chat_id)
     await state.finish()
+
+    access = None
     log.info("[new_user] step=djtoken_request chat_id=%s", chat_id)
-    get_djtoken = await send_req.djtoken(username=USERNAME, password=PASSWORD)
-    access = get_djtoken.get('access')
-    log.info("[new_user] step=djtoken_got chat_id=%s has_access=%s", chat_id, bool(access))
+    try:
+        get_djtoken = await send_req.djtoken(username=USERNAME, password=PASSWORD)
+        access = get_djtoken.get('access')
+        log.info("[new_user] step=djtoken_got chat_id=%s has_access=%s", chat_id, bool(access))
+    except Exception as e:
+        log.warning("[new_user] step=djtoken_failed chat_id=%s err=%s", chat_id, e)
     await state.update_data(access=access)
     user_chat_id = message.from_user.id
 
-    log.info("[new_user] step=create_user_profile chat_id=%s", chat_id)
-    try:
-        send_req.create_user_profile(
-            token=access,
-            chat_id=user_chat_id,
-            first_name=message.from_user.first_name,
-            last_name=message.from_user.last_name,
-            pin=1,
-            date=date,
-            username=username,
-            university_name=int(UNIVERSITY_ID),
-        )
-        log.info("[new_user] step=create_user_profile_done chat_id=%s", chat_id)
-    except Exception as e:
-        log.warning("[new_user] step=create_user_profile_failed chat_id=%s err=%s", chat_id, e)
+    if access:
+        log.info("[new_user] step=create_user_profile chat_id=%s", chat_id)
+        try:
+            send_req.create_user_profile(
+                token=access,
+                chat_id=user_chat_id,
+                first_name=message.from_user.first_name,
+                last_name=message.from_user.last_name,
+                pin=1,
+                date=date,
+                username=username,
+                university_name=int(UNIVERSITY_ID),
+            )
+            log.info("[new_user] step=create_user_profile_done chat_id=%s", chat_id)
+        except Exception as e:
+            log.warning("[new_user] step=create_user_profile_failed chat_id=%s err=%s", chat_id, e)
+    else:
+        log.info("[new_user] step=skipping_create_user_profile (no access token) chat_id=%s", chat_id)
 
     log.info("[new_user] step=sending_language_prompt chat_id=%s", chat_id)
     await message.answer(
