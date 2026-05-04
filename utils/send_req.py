@@ -1137,6 +1137,11 @@ async def get_user_profile(chat_id, university_id):
                         'status_code': response.status,
                         'detail': await response.text()
                     }
+    except asyncio.TimeoutError:
+        return {
+            'error': 'Request timeout',
+            'detail': 'get_user_profile timed out after 15s'
+        }
     except aiohttp.ClientError as e:
         return {
             'error': 'Request exception',
