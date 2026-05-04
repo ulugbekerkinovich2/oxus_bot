@@ -1602,6 +1602,10 @@ async def get_sertificate(message: types.Message, state: FSMContext):
     token = data['token']
     directions_response = await send_req.directions(token)
     directions = directions_response
+    if not isinstance(directions, list):
+        ic('directions returned non-list', directions)
+        await message.answer("Server bilan bog'lanishda xatolik. Iltimos, qayta urinib ko'ring.")
+        return
     unique_degrees = []
     ic('ok')
     for obj in directions:
@@ -1611,7 +1615,7 @@ async def get_sertificate(message: types.Message, state: FSMContext):
                 'id': degree_id,
                 'type_degree': my_degree[degree_id]})
     ic(unique_degrees)
-    buttons = [[InlineKeyboardButton(text=item['type_degree'], 
+    buttons = [[InlineKeyboardButton(text=item['type_degree'],
                                      callback_data=f"degree_{item['id']}") for item in unique_degrees]]
     degreeMenu = InlineKeyboardMarkup(inline_keyboard=buttons)
     ic('keldi')
@@ -1626,7 +1630,12 @@ async def has_application_start(message: types.Message, state: FSMContext):
     data = await state.get_data()
     token = data['token']
     directions_response = await send_req.directions(token)
+    ic(directions_response)
     directions = directions_response
+    if not isinstance(directions, list):
+        ic('directions returned non-list', directions)
+        await message.answer("Server bilan bog'lanishda xatolik. Iltimos, qayta urinib ko'ring.")
+        return
     unique_degrees = []
     ic('ok')
     for obj in directions:
@@ -1636,7 +1645,7 @@ async def has_application_start(message: types.Message, state: FSMContext):
                 'id': degree_id,
                 'type_degree': my_degree[degree_id]})
     ic(unique_degrees)
-    buttons = [[InlineKeyboardButton(text=item['type_degree'], 
+    buttons = [[InlineKeyboardButton(text=item['type_degree'],
                                      callback_data=f"degree_{item['id']}degree_{item['type_degree']}") for item in unique_degrees]]
     degreeMenu = InlineKeyboardMarkup(inline_keyboard=buttons)
     ic('keldi')
@@ -1670,7 +1679,13 @@ async def has_application(callback_query: types.CallbackQuery, state: FSMContext
                            parse_mode="HTML")
     data = await state.get_data()
     token = data['token']
-    direction_response = await send_req.directions(token) 
+    direction_response = await send_req.directions(token)
+    if not isinstance(direction_response, list):
+        ic('directions returned non-list', direction_response)
+        await callback_query.answer()
+        await bot.send_message(callback_query.from_user.id,
+                               "Server bilan bog'lanishda xatolik. Iltimos, qayta urinib ko'ring.")
+        return
     await state.update_data(directions=direction_response)
     ic(direction_response)
     # regions = region_response
@@ -1707,7 +1722,11 @@ async def region_selection_handler(callback_query: types.CallbackQuery, state: F
     ic(selected_degree_id)
     ic(selected_direction_id)
     await state.update_data(direction_id=selected_direction_id)
-    edu_type_response =await send_req.directions(token)
+    edu_type_response = await send_req.directions(token)
+    if not isinstance(edu_type_response, list):
+        ic('directions returned non-list', edu_type_response)
+        await callback_query.message.answer("Server bilan bog'lanishda xatolik. Iltimos, qayta urinib ko'ring.")
+        return
     edu_types = edu_type_response
     def return_edu_type_name_uz(edu_type_id):
         for edu in edu_types:
@@ -1780,6 +1799,10 @@ async def region_selection_handler(callback_query: types.CallbackQuery, state: F
 
 async def process_education_languages(callback_query, token, direction_id_selected, degree_id_selected, education_type_id_selected):
     edu_lang_response = await send_req.directions(token)
+    if not isinstance(edu_lang_response, list):
+        ic('directions returned non-list', edu_lang_response)
+        await callback_query.message.answer("Server bilan bog'lanishda xatolik. Iltimos, qayta urinib ko'ring.")
+        return
     edu_languages = edu_lang_response
     edu_langs = []
 
@@ -1864,6 +1887,10 @@ async def get_work_experience_certificate(message: types.Message, state: FSMCont
     await message.answer("Fayl yuklandi.")
     await EducationData.education_lang_id.set()
     edu_lang_response = await send_req.directions(token_)
+    if not isinstance(edu_lang_response, list):
+        ic('directions returned non-list', edu_lang_response)
+        await message.answer("Server bilan bog'lanishda xatolik. Iltimos, qayta urinib ko'ring.")
+        return
     edu_languages = edu_lang_response
     edu_langs = []
     data = await state.get_data()
