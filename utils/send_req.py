@@ -32,7 +32,7 @@ async def check_number(phone):
     url = f'https://{host}/v1/auth/check'
     data = {"phone": phone}
 
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
         async with session.post(url, headers=default_header, json=data) as response:
             if response.status == 201:
                 # log_data = {
@@ -73,7 +73,7 @@ async def user_register(number):
     }
     # response = requests.post(url, json=body, headers=default_header)
     # return response
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
         async with session.post(url, json=body, headers=default_header) as response:
             # ic(response.status)
             if response.status == 201:
@@ -113,7 +113,7 @@ async def user_verify(secret_code, phone):
     }
     # ic(body)
     
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
         async with session.post(url, json=body, headers=default_header) as response:
             data = await response.json()
             # ic(data)
@@ -156,7 +156,7 @@ async def user_login(phone):
     # response = requests.post(url, json=body, headers=default_header)
     # print(response.json())
     # return response
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
         async with session.post(url, headers=default_header, json=body) as response:
             if response.status == 200:
                 # log_data = {
@@ -195,7 +195,7 @@ async def application_form_info(birth_date, document, token):
     }
     ic(104, 'keldi')
 
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
         async with session.post(url, headers=default_header, json=body) as response:
             ic(body)
             ic(response.status, 'info')
@@ -301,7 +301,7 @@ def application_form_manual(token,birth_date,birth_place,email,extra_phone,first
 async def directions(token):
     url = f'https://{host}/v1/directions'
     default_header['Authorization'] = f'Bearer {token}'
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
         async with session.get(url, headers=default_header) as response:
             if response.status == 200:
                 data = await response.json()
@@ -325,7 +325,7 @@ async def applicants(token,is_transfer_student,chat_id_user, degree_id, directio
         'is_master': False if degree_id == 1 else True
     }
     # ic(body)
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
         async with session.post(url, headers=headers, json=body) as response:
             # ic(173, response.status, response.text)
             if response.status == 201:
@@ -394,7 +394,7 @@ def update_applicant(token, degree_id, direction_id, education_language_id, educ
 async def my_applications(token):
     url = f"https://{host}/v1/applicants/my-application"
     default_header['Authorization'] = f'Bearer {token}'
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
         async with session.get(url, headers=default_header) as response:
             if response.status == 200:
                 content_type = response.headers.get('Content-Type', '')
@@ -642,7 +642,7 @@ async def application_forms(token,birth_date,birth_place,citizenship,extra_phone
     }
     # response = requests.post(url, headers=default_header, json=body)
     # return response
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
         async with session.post(url, headers=default_header, json=body) as response:
             if response.status == 201:
                 # log_data = {
@@ -687,7 +687,7 @@ async def application_forms_transfer(token,country_id, direction_name,
     ic(body)
     # response = requests.post(url, headers=default_header, json=body)
     # return response
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
         async with session.post(url, headers=default_header, json=body) as response:
             if response.status == 201:
                 # log_data = {
@@ -722,7 +722,7 @@ async def application_forms_me(token):
     # response = requests.get(url, headers=default_header)
 
     # return response
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
         async with session.get(url, headers=default_header) as response:
             if response.status == 200:
                 data = await response.json()
@@ -755,7 +755,7 @@ async def application_forms_me_new(token):
     # response = requests.get(url, headers=default_header)
 
     # return response
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
         async with session.get(url, headers=default_header) as response:
             if response.status == 200:
                 data = await response.json()
@@ -790,7 +790,7 @@ async def delete_profile(token):
     url = f"https://{host}/v1/application-forms/delete-profile"
     headers = default_header.copy()
     headers['Authorization'] = f'Bearer {token}'
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
         async with session.delete(url, headers=headers) as response:
             if response.status == 200:
                 try:
@@ -827,7 +827,7 @@ async def return_token_use_refresh(refreshToken):
     }
     # response = requests.post(url, json=body, headers=default_header)
     # return response
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
         async with session.post(url, body=body, headers=default_header) as response:
             if response.status == 201:
                 data = await response.json()
@@ -999,7 +999,7 @@ async def djtoken(username, password):
     # response = requests.post(url, json=body)
     # return response.json()
 
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
         async with session.post(url, json=body) as response:
             if response.status == 200:
                 data = await response.json()
@@ -1109,7 +1109,7 @@ async def get_all_ser_profile(token):
     header = {
         'Authorization': f'Bearer {token}'
     }
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
         async with session.get(url, headers=header) as response:
             if response.status == 200:
                 data = await response.json()
@@ -1173,7 +1173,7 @@ async def get_user_profile(chat_id, university_id):
     }
 
     try:
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
             async with session.get(url, headers=headers, timeout=20) as response:
                 if response.status == 200:
                     return await response.json()
@@ -1200,7 +1200,7 @@ async def bot_usage(token, start_time, end_time):
         'start_time': start_time,
         'end_time': end_time
     }
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
         async with session.post(url, json=body, headers=header) as response:
             if response.status == 200:
                 data = await response.json()
@@ -1211,7 +1211,7 @@ async def bot_usage(token, start_time, end_time):
 
 async def download_file(file_url, dest):
     os.makedirs(os.path.dirname(dest), exist_ok=True)
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
         async with session.get(file_url) as resp:
             # print(resp.status)  # Using print for simplicity
             if resp.status == 200:
@@ -1257,7 +1257,7 @@ async def countries(token):
     header = {
         'Authorization': f'Bearer {token}'
     }
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
         async with session.get(url, headers=header) as response:
             if response.status == 200:
                 data = await response.json()
