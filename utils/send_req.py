@@ -304,17 +304,33 @@ async def educations_async(token):
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
             async with session.get(url, headers=default_header) as response:
+                raw_text = await response.text()
                 ic('educations status', response.status)
+                ic('educations raw (first 3000 chars)', raw_text[:3000])
                 if response.status != 200:
                     return {'error': 'Failed to fetch data', 'status_code': response.status}
                 try:
                     data = await response.json(content_type=None)
                 except Exception as je:
+                    ic('educations json parse error', str(je))
                     return {'error': 'Invalid JSON', 'detail': str(je)}
-                if isinstance(data, dict) and 'entities' in data:
-                    return data.get('entities') or []
+                if isinstance(data, dict):
+                    ic('educations top-level keys', list(data.keys()))
+                    if 'entities' in data:
+                        entities = data.get('entities') or []
+                        ic('educations entities count', len(entities) if isinstance(entities, list) else 'NOT_LIST')
+                        if isinstance(entities, list) and entities and isinstance(entities[0], dict):
+                            ic('educations entities[0] keys', list(entities[0].keys()))
+                            ic('educations entities[0] full', entities[0])
+                        return entities
+                elif isinstance(data, list):
+                    ic('educations list count', len(data))
+                    if data and isinstance(data[0], dict):
+                        ic('educations list[0] keys', list(data[0].keys()))
+                        ic('educations list[0] full', data[0])
                 return data
     except (asyncio.TimeoutError, aiohttp.ClientError) as e:
+        ic('educations request failed', str(e))
         return {'error': 'Request failed', 'detail': str(e)}
 
 
