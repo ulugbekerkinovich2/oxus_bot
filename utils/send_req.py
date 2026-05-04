@@ -298,6 +298,42 @@ def application_form_manual(token,birth_date,birth_place,email,extra_phone,first
         data = response.json() 
         return {'data': data, 'error': 'Failed to fetch data', 'status_code': response.status_code}
 
+async def educations_async(token):
+    url = f"https://{host}/v1/application-forms/educations/"
+    default_header['Authorization'] = f'Bearer {token}'
+    ic('>>> educations GET', url)
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
+            async with session.get(url, headers=default_header) as response:
+                raw_text = await response.text()
+                ic('<<< educations status', response.status)
+                ic('<<< educations raw (first 2000 chars)', raw_text[:2000])
+                if response.status == 200:
+                    try:
+                        data = await response.json(content_type=None)
+                    except Exception as je:
+                        ic('educations json parse error', str(je))
+                        return {'error': 'Invalid JSON', 'detail': str(je)}
+                    if isinstance(data, dict):
+                        ic('educations response top-level keys', list(data.keys()))
+                        if 'entities' in data:
+                            entities = data.get('entities') or []
+                            ic('educations entities count', len(entities) if isinstance(entities, list) else 'NOT_LIST')
+                            if isinstance(entities, list) and entities and isinstance(entities[0], dict):
+                                ic('educations entities[0] keys', list(entities[0].keys()))
+                            return entities
+                    elif isinstance(data, list):
+                        ic('educations list count', len(data))
+                        if data and isinstance(data[0], dict):
+                            ic('educations list[0] keys', list(data[0].keys()))
+                    return data
+                else:
+                    return {'error': 'Failed to fetch data', 'status_code': response.status}
+    except (asyncio.TimeoutError, aiohttp.ClientError) as e:
+        ic('educations request failed', str(e))
+        return {'error': 'Request failed', 'detail': str(e)}
+
+
 async def directions(token):
     url = f'https://{host}/v1/directions'
     default_header['Authorization'] = f'Bearer {token}'

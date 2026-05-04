@@ -1772,6 +1772,10 @@ async def region_selection_handler(callback_query: types.CallbackQuery, state: F
     edu_type_response = await send_req.directions(token)
     if isinstance(edu_type_response, dict):
         edu_type_response = edu_type_response.get('entities', []) if 'entities' in edu_type_response else []
+    educations_probe = await send_req.educations_async(token)
+    ic('educations_probe type', type(educations_probe).__name__)
+    if isinstance(educations_probe, list) and educations_probe and isinstance(educations_probe[0], dict):
+        ic('educations_probe[0] full', educations_probe[0])
     if not isinstance(edu_type_response, list):
         ic('directions returned non-list', edu_type_response)
         await callback_query.message.answer("Server bilan bog'lanishda xatolik. Iltimos, qayta urinib ko'ring.")
