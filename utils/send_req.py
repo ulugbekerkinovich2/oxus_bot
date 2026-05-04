@@ -298,6 +298,40 @@ def application_form_manual(token,birth_date,birth_place,email,extra_phone,first
         data = response.json() 
         return {'data': data, 'error': 'Failed to fetch data', 'status_code': response.status_code}
 
+def _mask(s):
+    if not s:
+        return s
+    s = str(s)
+    if len(s) <= 8:
+        return '***'
+    return f"{s[:4]}...{s[-4:]}"
+
+
+async def probe_education_types(token, direction_id, degree_id):
+    default_header['Authorization'] = f'Bearer {token}'
+    candidates = [
+        f"https://{host}/v1/education-types",
+        f"https://{host}/v1/education-types?direction_id={direction_id}&degree_id={degree_id}",
+        f"https://{host}/v1/directions/{direction_id}",
+        f"https://{host}/v1/directions/{direction_id}/education-types",
+        f"https://{host}/v1/directions/{direction_id}/tuition-fees",
+        f"https://{host}/v1/tuition-fees?direction_id={direction_id}&degree_id={degree_id}",
+        f"https://{host}/v1/application-forms/education-types",
+        f"https://{host}/v1/application-forms/education-types?direction_id={direction_id}&degree_id={degree_id}",
+    ]
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
+            for url in candidates:
+                try:
+                    async with session.get(url, headers=default_header) as r:
+                        body = (await r.text())[:600]
+                        ic('probe', url, r.status, body)
+                except Exception as e:
+                    ic('probe failed', url, str(e))
+    except Exception as e:
+        ic('probe session failed', str(e))
+
+
 async def educations_async(token):
     url = f"https://{host}/v1/application-forms/educations/"
     default_header['Authorization'] = f'Bearer {token}'

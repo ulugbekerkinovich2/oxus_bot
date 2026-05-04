@@ -18,6 +18,15 @@ import os
 import aiofiles.os
 from icecream import ic
 import json
+
+
+def _mask(s):
+    if not s:
+        return s
+    s = str(s)
+    if len(s) <= 8:
+        return '***'
+    return f"{s[:4]}...{s[-4:]}"
 from keyboards.default.registerKeyBoardButton import yes_no,update_education_info
 from keyboards.default.registerKeyBoardButton import enter_button, menu,register, menu_full
 from data.config import username as USERNAME
@@ -77,7 +86,7 @@ async def transfer_edu(message: types.Message, state: FSMContext):
 
     all_data_state = await state.get_data() 
     token = all_data_state.get('token', None)
-    ic('token72', token)
+    ic('token72', _mask(token))
     if token is None:
         button_phone = types.KeyboardButton(text='📲 Telefon raqamni yuborish', request_contact=True)
         keyboard.add(button_phone)
@@ -107,7 +116,7 @@ async def my_application(message: types.Message, state: FSMContext):
 
     all_data_state = await state.get_data() 
     token = all_data_state.get('token', None)
-    ic('token72', token)
+    ic('token72', _mask(token))
     if token is None:
         button_phone = types.KeyboardButton(text='📲 Telefon raqamni yuborish', request_contact=True)
         keyboard.add(button_phone)
@@ -597,8 +606,8 @@ async def info(message: types.Message, state: FSMContext):
     document = data.get('document')
     new_token = data.get('new_token')
     token = data.get('token')
-    ic('new_token', new_token)
-    ic('token', token)
+    ic('new_token', _mask(new_token))
+    ic('token', _mask(token))
     # first_name = data.get('first_name')
     # last_name = data.get('last_name')
     phone = data.get('phone')
@@ -1705,16 +1714,30 @@ async def has_application(callback_query: types.CallbackQuery, state: FSMContext
                 or item.get('name_en')
                 or f"Yo'nalish #{_direction_id(item)}")
 
+    try:
+        selected_degree_id_int = int(selected_degree_id)
+    except (TypeError, ValueError):
+        selected_degree_id_int = None
+
     buttons = []
     for item in direction_response:
         if not isinstance(item, dict):
             continue
-        if item.get('degree_id') != int(selected_degree_id):
+        try:
+            item_degree_id = int(item.get('degree_id')) if item.get('degree_id') is not None else None
+        except (TypeError, ValueError):
+            item_degree_id = None
+        if item_degree_id != selected_degree_id_int:
+            continue
+        adm = (item.get('admission_status') or '').lower()
+        lms = (item.get('lms_status') or '').lower()
+        if adm and adm != 'active':
+            continue
+        if lms and lms != 'active':
             continue
         did = _direction_id(item)
         if did is None:
             continue
-        ic('direction', did, _direction_name(item))
         buttons.append([InlineKeyboardButton(
             text=_direction_name(item),
             callback_data=f"direction_{did}",
@@ -1774,11 +1797,19 @@ async def region_selection_handler(callback_query: types.CallbackQuery, state: F
     ic(selected_direction_id)
     await state.update_data(direction_id=selected_direction_id)
     edu_types = await _fetch_education_sources(token)
-    ic('edu_types count', len(edu_types), 'selected', selected_direction_id, selected_degree_id)
+    ic('edu_types count', len(edu_types), 'selected_dir', selected_direction_id, 'selected_deg', selected_degree_id)
     uniq_edu_types = _build_uniq_edu_types(edu_types, selected_direction_id, selected_degree_id)
     ic('uniq_edu_types count', len(uniq_edu_types))
 
     if not uniq_edu_types:
+        if edu_types and isinstance(edu_types[0], dict):
+            ic('edu_types[0] keys', list(edu_types[0].keys()))
+            ic('edu_types[0] sample direction id fields',
+               edu_types[0].get('direction_id'),
+               edu_types[0].get('id'),
+               edu_types[0].get('university_direction_id'),
+               edu_types[0].get('mt_direction_id'))
+        await send_req.probe_education_types(token, selected_direction_id, selected_degree_id)
         await callback_query.message.answer("Bu yo'nalish bo'yicha ta'lim shakli topilmadi.")
         return
 
