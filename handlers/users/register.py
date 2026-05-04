@@ -1720,6 +1720,10 @@ async def has_application(callback_query: types.CallbackQuery, state: FSMContext
             callback_data=f"direction_{did}",
         )])
     ic('buttons built', len(buttons))
+    if not buttons:
+        await callback_query.answer()
+        await bot.send_message(callback_query.from_user.id, "Yo'nalish topilmadi.")
+        return
     directionMenu = InlineKeyboardMarkup(inline_keyboard=buttons)
     await callback_query.answer()
     await bot.send_message(callback_query.from_user.id, select_direction, reply_markup=directionMenu)
@@ -1769,58 +1773,15 @@ async def region_selection_handler(callback_query: types.CallbackQuery, state: F
     ic(selected_degree_id)
     ic(selected_direction_id)
     await state.update_data(direction_id=selected_direction_id)
-    edu_type_response = await send_req.directions(token)
-    if isinstance(edu_type_response, dict):
-        edu_type_response = edu_type_response.get('entities', []) if 'entities' in edu_type_response else []
-    educations_probe = await send_req.educations_async(token)
-    ic('educations_probe type', type(educations_probe).__name__)
-    if isinstance(educations_probe, list) and educations_probe and isinstance(educations_probe[0], dict):
-        ic('educations_probe[0] full', educations_probe[0])
-    if not isinstance(edu_type_response, list):
-        ic('directions returned non-list', edu_type_response)
-        await callback_query.message.answer("Server bilan bog'lanishda xatolik. Iltimos, qayta urinib ko'ring.")
-        return
-    edu_types = edu_type_response
-    ic('edu_types count', len(edu_types))
-    if edu_types and isinstance(edu_types[0], dict):
-        ic('edu_types[0] keys', list(edu_types[0].keys()))
-
-    def _did(item):
-        return item.get('direction_id') or item.get('id')
-
-    def return_edu_type_name_uz(edu_type_id):
-        for edu in edu_types:
-            if not isinstance(edu, dict):
-                continue
-            education_types = edu.get('education_types') or []
-            for k in education_types:
-                if isinstance(k, dict) and k.get('education_type_id') == edu_type_id:
-                    return k.get('education_type_name_uz') or k.get('name_uz') or k.get('name')
-        return None
-
-    uniq_edu_types = []
-    for obj in edu_types:
-        if not isinstance(obj, dict):
-            continue
-        direction_id = _did(obj)
-        degree_id = obj.get('degree_id')
-        if degree_id != selected_degree_id or direction_id != selected_direction_id:
-            continue
-        tuition_fees = obj.get('tuition_fees') or []
-        for k in tuition_fees:
-            if not isinstance(k, dict):
-                continue
-            education_type_id = k.get('education_type_id')
-            if education_type_id is None:
-                continue
-            edu_type_name = return_edu_type_name_uz(education_type_id)
-            if edu_type_name:
-                item_obj = {'id': education_type_id, 'name': edu_type_name}
-                ic(item_obj)
-                if item_obj not in uniq_edu_types:
-                    uniq_edu_types.append(item_obj)
+    edu_types = await _fetch_education_sources(token)
+    ic('edu_types count', len(edu_types), 'selected', selected_direction_id, selected_degree_id)
+    uniq_edu_types = _build_uniq_edu_types(edu_types, selected_direction_id, selected_degree_id)
     ic('uniq_edu_types count', len(uniq_edu_types))
-    
+
+    if not uniq_edu_types:
+        await callback_query.message.answer("Bu yo'nalish bo'yicha ta'lim shakli topilmadi.")
+        return
+
     buttons = [[InlineKeyboardButton(text=item['name'], callback_data=f"e_t_{item['id']}e_t_{item['name']}")] for item in uniq_edu_types]
     eduTypesMenu = InlineKeyboardMarkup(inline_keyboard=buttons)
     await callback_query.message.answer(select_edu_type, reply_markup=eduTypesMenu)
@@ -1861,18 +1822,71 @@ async def region_selection_handler(callback_query: types.CallbackQuery, state: F
         await process_education_languages(callback_query, token, direction_id_selected, degree_id_selected, education_type_id_selected)
 
 async def process_education_languages(callback_query, token, direction_id_selected, degree_id_selected, education_type_id_selected):
-    edu_lang_response = await send_req.directions(token)
-    if isinstance(edu_lang_response, dict):
-        edu_lang_response = edu_lang_response.get('entities', []) if 'entities' in edu_lang_response else []
-    if not isinstance(edu_lang_response, list):
-        ic('directions returned non-list', edu_lang_response)
-        await callback_query.message.answer("Server bilan bog'lanishda xatolik. Iltimos, qayta urinib ko'ring.")
-        return
-    edu_languages = edu_lang_response
+    edu_languages = await _fetch_education_sources(token)
     edu_langs = _build_edu_langs(edu_languages, direction_id_selected, degree_id_selected, education_type_id_selected)
+    ic('edu_langs count', len(edu_langs))
+    if not edu_langs:
+        await callback_query.message.answer("Bu yo'nalish bo'yicha ta'lim tili topilmadi.")
+        return
     buttons = [[InlineKeyboardButton(text=item['name'], callback_data=f"_{item['id']}_{item['tuition_fee']}")] for item in edu_langs]
     languageMenu = InlineKeyboardMarkup(inline_keyboard=buttons)
     await callback_query.message.answer(select_edu_language, reply_markup=languageMenu)
+
+
+async def _fetch_education_sources(token):
+    sources = []
+    edu = await send_req.educations_async(token)
+    if isinstance(edu, dict):
+        edu = edu.get('entities', []) if 'entities' in edu else []
+    if isinstance(edu, list):
+        sources.extend(x for x in edu if isinstance(x, dict))
+    direc = await send_req.directions(token)
+    if isinstance(direc, dict):
+        direc = direc.get('entities', []) if 'entities' in direc else []
+    if isinstance(direc, list):
+        sources.extend(x for x in direc if isinstance(x, dict))
+    return sources
+
+
+def _build_uniq_edu_types(sources, selected_direction_id, selected_degree_id):
+    def name_for(et_id, source):
+        for k in source.get('education_types') or []:
+            if isinstance(k, dict) and k.get('education_type_id') == et_id:
+                return (k.get('education_type_name_uz')
+                        or k.get('name_uz') or k.get('name'))
+        return None
+
+    uniq = []
+    for obj in sources:
+        if _direction_id_of(obj) != selected_direction_id:
+            continue
+        try:
+            degree_id = int(obj.get('degree_id')) if obj.get('degree_id') is not None else None
+        except (TypeError, ValueError):
+            degree_id = None
+        if degree_id != selected_degree_id:
+            continue
+        for k in obj.get('tuition_fees') or []:
+            if not isinstance(k, dict):
+                continue
+            et_id = k.get('education_type_id')
+            if et_id is None:
+                continue
+            et_name = name_for(et_id, obj) or _lookup_edu_type_name(sources, et_id)
+            if et_name:
+                item_obj = {'id': et_id, 'name': et_name}
+                if item_obj not in uniq:
+                    uniq.append(item_obj)
+    return uniq
+
+
+def _lookup_edu_type_name(sources, et_id):
+    for source in sources:
+        for k in source.get('education_types') or []:
+            if isinstance(k, dict) and k.get('education_type_id') == et_id:
+                return (k.get('education_type_name_uz')
+                        or k.get('name_uz') or k.get('name'))
+    return None
 
 
 def _direction_id_of(obj):
@@ -1984,20 +1998,16 @@ async def get_work_experience_certificate(message: types.Message, state: FSMCont
 
     await message.answer("Fayl yuklandi.")
     await EducationData.education_lang_id.set()
-    edu_lang_response = await send_req.directions(token_)
-    if isinstance(edu_lang_response, dict):
-        edu_lang_response = edu_lang_response.get('entities', []) if 'entities' in edu_lang_response else []
-    if not isinstance(edu_lang_response, list):
-        ic('directions returned non-list', edu_lang_response)
-        await message.answer("Server bilan bog'lanishda xatolik. Iltimos, qayta urinib ko'ring.")
-        return
-    edu_languages = edu_lang_response
+    edu_languages = await _fetch_education_sources(token_)
     data = await state.get_data()
     token = data['token']
     education_type_id_selected = int(data['education_type'])
     direction_id_selected = int(data['direction_id'])
     degree_id_selected = int(data['degree_id'])
     edu_langs = _build_edu_langs(edu_languages, direction_id_selected, degree_id_selected, education_type_id_selected)
+    if not edu_langs:
+        await message.answer("Bu yo'nalish bo'yicha ta'lim tili topilmadi.")
+        return
     buttons = [[InlineKeyboardButton(text=item['name'], callback_data=f"_{item['id']}_{item['tuition_fee']}")] for item in edu_langs]
     ic(buttons)
     languageMenu = InlineKeyboardMarkup(inline_keyboard=buttons)
