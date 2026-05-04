@@ -1680,6 +1680,8 @@ async def has_application(callback_query: types.CallbackQuery, state: FSMContext
     data = await state.get_data()
     token = data['token']
     direction_response = await send_req.directions(token)
+    if isinstance(direction_response, dict):
+        direction_response = direction_response.get('entities', []) if 'entities' in direction_response else []
     if not isinstance(direction_response, list):
         ic('directions returned non-list', direction_response)
         await callback_query.answer()
