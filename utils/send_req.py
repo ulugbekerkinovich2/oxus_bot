@@ -992,38 +992,17 @@ def application_forms_for_personal_data(token,  birth_date, birth_place, citizen
 
 async def djtoken(username, password):
     url = f"https://{crm_django_domain}/api/token/"
-    body = {
-        'username': username,
-        'password': password
-    }
-    # response = requests.post(url, json=body)
-    # return response.json()
-
-    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
-        async with session.post(url, json=body) as response:
-            if response.status == 200:
-                data = await response.json()
-                # log_data = {
-                #     'time': datetime.utcnow().isoformat(),
-                #     'event': 'djtoken',
-                #     'details': {
-                #         'status_code': response.status,
-                #         # 'data': data
-                #     }
-                # }
-                # log_to_json(log_data)
-                return data
-            else:
-                # log_data = {
-                #     'time': datetime.utcnow().isoformat(),
-                #     'event': 'djtoken',
-                #     'details': {
-                #         'status_code': response.status,
-                #         # 'data': response.json()
-                #     }
-                # }
-                # log_to_json(log_data)
+    body = {'username': username, 'password': password}
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
+            async with session.post(url, json=body) as response:
+                if response.status == 200:
+                    return await response.json()
                 return {'error': 'Failed to get token', 'status_code': response.status}
+    except Exception as e:
+        import logging
+        logging.getLogger("send_req.djtoken").warning("djtoken unreachable: %s", e)
+        return {'error': str(e), 'status_code': 0, 'access': None, 'refresh': None}
 
 def create_user_profile(token,chat_id,first_name,last_name,pin,date,username,university_name):
     url = f"https://{crm_django_domain}/create-user-profile/"
@@ -1039,29 +1018,15 @@ def create_user_profile(token,chat_id,first_name,last_name,pin,date,username,uni
         'date': date,
         "university_name": university_name
     }
-    # ic(body)
-    response = requests.post(url, json=body, headers=header, timeout=15)
-    if response.status_code == 201:
-        # log_data = {
-        #     'time': datetime.utcnow().isoformat(),
-        #     'event': 'create_user_profile',
-        #     'details': {
-        #         'status_code': response.status_code,
-        #         # 'data': response.json()
-        #     }
-        # }
-        return response.json()
-    else:
-        # log_data = {
-        #     'time': datetime.utcnow().isoformat(),
-        #     'event': 'create_user_profile',
-        #     'details': {
-        #         'status_code': response.status_code,
-        #         # 'data': response.text
-        #     }
-        # }
-        # log_to_json(log_data)
+    try:
+        response = requests.post(url, json=body, headers=header, timeout=15)
+        if response.status_code == 201:
+            return response.json()
         return {'error': 'Failed to create user profile', 'status_code': response.status_code}
+    except Exception as e:
+        import logging
+        logging.getLogger("send_req.create_user_profile").warning("create_user_profile unreachable: %s", e)
+        return {'error': str(e), 'status_code': 0}
 
 def update_user_profile(university_id, chat_id, phone, first_name, last_name, pin, username,date):
     url = f"https://{crm_django_domain}/update-user-profile/{chat_id}/{university_id}/"
@@ -1076,29 +1041,18 @@ def update_user_profile(university_id, chat_id, phone, first_name, last_name, pi
         'date': date,
         'university_name': university_id
     }
-    # ic(body)
-    response = requests.put(url, json=body, timeout=15)
-    if response.status_code == 200:
-        # log_data = {
-        #     'time': datetime.utcnow().isoformat(),
-        #     'event': 'update_user_profile',
-        #     'details': {
-        #         'status_code': response.status_code,
-        #         'data': response.json()
-        #     }
-        # }
-        return response.json()
-    else:
-        # log_data = {
-        #     'time': datetime.utcnow().isoformat(),
-        #     'event': 'update_user_profile',
-        #     'details': {
-        #         'status_code': response.status_code,
-        #         'data': response.json()
-        #     }
-        # }
-        # log_to_json(log_data)
-        return response.json()
+    try:
+        response = requests.put(url, json=body, timeout=15)
+        if response.status_code == 200:
+            return response.json()
+        try:
+            return response.json()
+        except Exception:
+            return {'error': 'update_user_profile non-json', 'status_code': response.status_code}
+    except Exception as e:
+        import logging
+        logging.getLogger("send_req.update_user_profile").warning("update_user_profile unreachable: %s", e)
+        return {'error': str(e), 'status_code': 0}
 
 
 # a = update_user_profile(3, "935920479", '998942559015', 'Erkinov', 'Abdulloh', '12341234')
