@@ -1602,6 +1602,10 @@ async def get_sertificate(message: types.Message, state: FSMContext):
     token = data['token']
     directions_response = await send_req.directions(token)
     directions = directions_response
+    if not isinstance(directions, list):
+        ic('directions returned non-list', directions)
+        await message.answer("Server bilan bog'lanishda xatolik. Iltimos, qayta urinib ko'ring.")
+        return
     unique_degrees = []
     ic('ok')
     for obj in directions:
@@ -1611,7 +1615,7 @@ async def get_sertificate(message: types.Message, state: FSMContext):
                 'id': degree_id,
                 'type_degree': my_degree[degree_id]})
     ic(unique_degrees)
-    buttons = [[InlineKeyboardButton(text=item['type_degree'], 
+    buttons = [[InlineKeyboardButton(text=item['type_degree'],
                                      callback_data=f"degree_{item['id']}") for item in unique_degrees]]
     degreeMenu = InlineKeyboardMarkup(inline_keyboard=buttons)
     ic('keldi')
@@ -1627,6 +1631,10 @@ async def has_application_start(message: types.Message, state: FSMContext):
     token = data['token']
     directions_response = await send_req.directions(token)
     directions = directions_response
+    if not isinstance(directions, list):
+        ic('directions returned non-list', directions)
+        await message.answer("Server bilan bog'lanishda xatolik. Iltimos, qayta urinib ko'ring.")
+        return
     unique_degrees = []
     ic('ok')
     for obj in directions:
@@ -1636,7 +1644,7 @@ async def has_application_start(message: types.Message, state: FSMContext):
                 'id': degree_id,
                 'type_degree': my_degree[degree_id]})
     ic(unique_degrees)
-    buttons = [[InlineKeyboardButton(text=item['type_degree'], 
+    buttons = [[InlineKeyboardButton(text=item['type_degree'],
                                      callback_data=f"degree_{item['id']}degree_{item['type_degree']}") for item in unique_degrees]]
     degreeMenu = InlineKeyboardMarkup(inline_keyboard=buttons)
     ic('keldi')

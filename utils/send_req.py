@@ -301,13 +301,16 @@ def application_form_manual(token,birth_date,birth_place,email,extra_phone,first
 async def directions(token):
     url = f'https://{host}/v1/directions'
     default_header['Authorization'] = f'Bearer {token}'
-    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
-        async with session.get(url, headers=default_header) as response:
-            if response.status == 200:
-                data = await response.json()
-                return data
-            else:
-                return {'error': 'Failed to fetch data', 'status_code': response.status}
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
+            async with session.get(url, headers=default_header) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data
+                else:
+                    return {'error': 'Failed to fetch data', 'status_code': response.status}
+    except (asyncio.TimeoutError, aiohttp.ClientError) as e:
+        return {'error': 'Request failed', 'detail': str(e)}
 
 async def applicants(token,is_transfer_student,chat_id_user, degree_id, direction_id, education_language_id, education_type_id, work_experience_document=None):
     url = f"https://{host}/v1/applicants"
