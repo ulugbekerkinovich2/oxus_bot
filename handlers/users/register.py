@@ -1770,40 +1770,52 @@ async def region_selection_handler(callback_query: types.CallbackQuery, state: F
     ic(selected_direction_id)
     await state.update_data(direction_id=selected_direction_id)
     edu_type_response = await send_req.directions(token)
+    if isinstance(edu_type_response, dict):
+        edu_type_response = edu_type_response.get('entities', []) if 'entities' in edu_type_response else []
     if not isinstance(edu_type_response, list):
         ic('directions returned non-list', edu_type_response)
         await callback_query.message.answer("Server bilan bog'lanishda xatolik. Iltimos, qayta urinib ko'ring.")
         return
     edu_types = edu_type_response
+    ic('edu_types count', len(edu_types))
+    if edu_types and isinstance(edu_types[0], dict):
+        ic('edu_types[0] keys', list(edu_types[0].keys()))
+
+    def _did(item):
+        return item.get('direction_id') or item.get('id')
+
     def return_edu_type_name_uz(edu_type_id):
         for edu in edu_types:
-            direction_id = edu['direction_id']
-            degree_id = edu['degree_id']
-            education_types = edu['education_types']
-            if edu['direction_id'] == direction_id and edu['degree_id'] == degree_id:
-                for k in education_types:
-                    if k['education_type_id'] == edu_type_id:
-                        return k['education_type_name_uz']
+            if not isinstance(edu, dict):
+                continue
+            education_types = edu.get('education_types') or []
+            for k in education_types:
+                if isinstance(k, dict) and k.get('education_type_id') == edu_type_id:
+                    return k.get('education_type_name_uz') or k.get('name_uz') or k.get('name')
         return None
 
     uniq_edu_types = []
     for obj in edu_types:
-        direction_id = obj['direction_id']
-        degree_id = obj['degree_id']
-        if selected_degree_id == degree_id and direction_id == selected_direction_id:
-            
-            tuition_fees = obj['tuition_fees']
-            for k in tuition_fees:
-                education_type_id = k['education_type_id']
-                edu_type_name = return_edu_type_name_uz(education_type_id)
-                if edu_type_name:
-                    obj = {
-                            'id': education_type_id,
-                            'name': edu_type_name
-                        }
-                    ic(obj)
-                    if obj not in uniq_edu_types:
-                        uniq_edu_types.append(obj)
+        if not isinstance(obj, dict):
+            continue
+        direction_id = _did(obj)
+        degree_id = obj.get('degree_id')
+        if degree_id != selected_degree_id or direction_id != selected_direction_id:
+            continue
+        tuition_fees = obj.get('tuition_fees') or []
+        for k in tuition_fees:
+            if not isinstance(k, dict):
+                continue
+            education_type_id = k.get('education_type_id')
+            if education_type_id is None:
+                continue
+            edu_type_name = return_edu_type_name_uz(education_type_id)
+            if edu_type_name:
+                item_obj = {'id': education_type_id, 'name': edu_type_name}
+                ic(item_obj)
+                if item_obj not in uniq_edu_types:
+                    uniq_edu_types.append(item_obj)
+    ic('uniq_edu_types count', len(uniq_edu_types))
     
     buttons = [[InlineKeyboardButton(text=item['name'], callback_data=f"e_t_{item['id']}e_t_{item['name']}")] for item in uniq_edu_types]
     eduTypesMenu = InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -1846,44 +1858,79 @@ async def region_selection_handler(callback_query: types.CallbackQuery, state: F
 
 async def process_education_languages(callback_query, token, direction_id_selected, degree_id_selected, education_type_id_selected):
     edu_lang_response = await send_req.directions(token)
+    if isinstance(edu_lang_response, dict):
+        edu_lang_response = edu_lang_response.get('entities', []) if 'entities' in edu_lang_response else []
     if not isinstance(edu_lang_response, list):
         ic('directions returned non-list', edu_lang_response)
         await callback_query.message.answer("Server bilan bog'lanishda xatolik. Iltimos, qayta urinib ko'ring.")
         return
     edu_languages = edu_lang_response
+    edu_langs = _build_edu_langs(edu_languages, direction_id_selected, degree_id_selected, education_type_id_selected)
+    buttons = [[InlineKeyboardButton(text=item['name'], callback_data=f"_{item['id']}_{item['tuition_fee']}")] for item in edu_langs]
+    languageMenu = InlineKeyboardMarkup(inline_keyboard=buttons)
+    await callback_query.message.answer(select_edu_language, reply_markup=languageMenu)
+
+
+def _direction_id_of(obj):
+    val = obj.get('direction_id') if isinstance(obj, dict) else None
+    if val is None and isinstance(obj, dict):
+        val = obj.get('id')
+    try:
+        return int(val) if val is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _build_edu_langs(edu_languages, direction_id_selected, degree_id_selected, education_type_id_selected):
     edu_langs = []
 
     def return_language_name(language_id):
         for obj in edu_languages:
-            education_languages = obj['education_languages']
-            for lang in education_languages:
-                education_language_id = int(lang['education_language_id'])
-                if language_id == education_language_id:
-                    return lang['education_language_name_uz']
+            if not isinstance(obj, dict):
+                continue
+            for lang in obj.get('education_languages') or []:
+                if not isinstance(lang, dict):
+                    continue
+                try:
+                    eid = int(lang.get('education_language_id'))
+                except (TypeError, ValueError):
+                    continue
+                if eid == language_id:
+                    return (lang.get('education_language_name_uz')
+                            or lang.get('name_uz') or lang.get('name'))
         return None
 
     for obj in edu_languages:
-        direction_id = int(obj['direction_id'])
-        degree_id = int(obj['degree_id'])
-        if direction_id == direction_id_selected and degree_id == degree_id_selected:
-            tuition_fees = obj['tuition_fees']
-            for t in tuition_fees:
-                education_language_id = int(t['education_language_id'])
-                education_type_id = int(t['education_type_id'])
-                if education_type_id == education_type_id_selected:
-                    get_lang_name = return_language_name(education_language_id)
-                    if get_lang_name:
-                        lang_obj = {
-                            'name': get_lang_name,
-                            'id': education_language_id,
-                            'tuition_fee': t['tuition_fee']
-                        }
-                        if lang_obj not in edu_langs:
-                            edu_langs.append(lang_obj)
-
-    buttons = [[InlineKeyboardButton(text=item['name'], callback_data=f"_{item['id']}_{item['tuition_fee']}")] for item in edu_langs]
-    languageMenu = InlineKeyboardMarkup(inline_keyboard=buttons)
-    await callback_query.message.answer(select_edu_language, reply_markup=languageMenu)
+        if not isinstance(obj, dict):
+            continue
+        direction_id = _direction_id_of(obj)
+        try:
+            degree_id = int(obj.get('degree_id')) if obj.get('degree_id') is not None else None
+        except (TypeError, ValueError):
+            degree_id = None
+        if direction_id != direction_id_selected or degree_id != degree_id_selected:
+            continue
+        for t in obj.get('tuition_fees') or []:
+            if not isinstance(t, dict):
+                continue
+            try:
+                education_language_id = int(t.get('education_language_id'))
+                education_type_id = int(t.get('education_type_id'))
+            except (TypeError, ValueError):
+                continue
+            if education_type_id != education_type_id_selected:
+                continue
+            get_lang_name = return_language_name(education_language_id)
+            if get_lang_name:
+                lang_obj = {
+                    'name': get_lang_name,
+                    'id': education_language_id,
+                    'tuition_fee': t.get('tuition_fee'),
+                }
+                if lang_obj not in edu_langs:
+                    edu_langs.append(lang_obj)
+    ic('edu_langs count', len(edu_langs))
+    return edu_langs
 
 @dp.message_handler(content_types=['document'], state=EducationData.work_experience)
 async def get_work_experience_certificate(message: types.Message, state: FSMContext):
@@ -1934,45 +1981,19 @@ async def get_work_experience_certificate(message: types.Message, state: FSMCont
     await message.answer("Fayl yuklandi.")
     await EducationData.education_lang_id.set()
     edu_lang_response = await send_req.directions(token_)
+    if isinstance(edu_lang_response, dict):
+        edu_lang_response = edu_lang_response.get('entities', []) if 'entities' in edu_lang_response else []
     if not isinstance(edu_lang_response, list):
         ic('directions returned non-list', edu_lang_response)
         await message.answer("Server bilan bog'lanishda xatolik. Iltimos, qayta urinib ko'ring.")
         return
     edu_languages = edu_lang_response
-    edu_langs = []
     data = await state.get_data()
     token = data['token']
     education_type_id_selected = int(data['education_type'])
     direction_id_selected = int(data['direction_id'])
     degree_id_selected = int(data['degree_id'])
-    def return_language_name(language_id):
-        for obj in edu_languages:
-            education_languages = obj['education_languages']
-            for lang in education_languages:
-                education_language_id = int(lang['education_language_id'])
-                if language_id == education_language_id:
-                    return lang['education_language_name_uz']
-        return None
-
-    for obj in edu_languages:
-        direction_id = int(obj['direction_id'])
-        degree_id = int(obj['degree_id'])
-        if direction_id == direction_id_selected and degree_id == degree_id_selected:
-            tuition_fees = obj['tuition_fees']
-            for t in tuition_fees:
-                education_language_id = int(t['education_language_id'])
-                education_type_id = int(t['education_type_id'])
-                if education_type_id == education_type_id_selected:
-                    get_lang_name = return_language_name(education_language_id)
-                    if get_lang_name:
-                        lang_obj = {
-                            'name': get_lang_name,
-                            'id': education_language_id,
-                            'tuition_fee': t['tuition_fee']
-                        }
-                        if lang_obj not in edu_langs:
-                            edu_langs.append(lang_obj)
-
+    edu_langs = _build_edu_langs(edu_languages, direction_id_selected, degree_id_selected, education_type_id_selected)
     buttons = [[InlineKeyboardButton(text=item['name'], callback_data=f"_{item['id']}_{item['tuition_fee']}")] for item in edu_langs]
     ic(buttons)
     languageMenu = InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -1993,14 +2014,30 @@ async def after_select_lang(callback_query: types.CallbackQuery, state: FSMConte
     data_state = await state.get_data()
     directions = data_state.get('directions')
     def get_education_language_name(directions, direction_id, education_lang_id):
+        if not isinstance(directions, list):
+            return None
         for obj in directions:
-            if obj['direction_id'] == direction_id:
-                for lang in obj['education_languages']:
-                    ic(obj['education_languages'])
-                    if lang['education_language_id'] == int(education_lang_id):
-                        for tu in obj['tuition_fees']:
-                            if tu['education_language_id'] == int(education_lang_id):
-                                return lang['education_language_name_uz']
+            if not isinstance(obj, dict):
+                continue
+            if _direction_id_of(obj) != direction_id:
+                continue
+            for lang in obj.get('education_languages') or []:
+                if not isinstance(lang, dict):
+                    continue
+                try:
+                    if int(lang.get('education_language_id')) != int(education_lang_id):
+                        continue
+                except (TypeError, ValueError):
+                    continue
+                for tu in obj.get('tuition_fees') or []:
+                    if not isinstance(tu, dict):
+                        continue
+                    try:
+                        if int(tu.get('education_language_id')) == int(education_lang_id):
+                            return (lang.get('education_language_name_uz')
+                                    or lang.get('name_uz') or lang.get('name'))
+                    except (TypeError, ValueError):
+                        continue
         return None
 
     education_language_name = get_education_language_name(directions, int(data_state.get('direction_id')), int(education_lang_id))
