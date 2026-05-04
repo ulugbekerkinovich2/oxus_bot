@@ -1,7 +1,6 @@
 import asyncio
 
 import aiohttp
-import pytest
 from aioresponses import aioresponses
 
 from data.config import crm_django_domain
@@ -54,6 +53,15 @@ class TestDirections:
             m.get(DIRECTIONS_URL, status=200, payload=payload)
             result = await send_req.directions(self.TOKEN)
         assert result == payload
+
+    async def test_unwraps_entities_from_paginated_response(self):
+        """API may return {entities: [...], pageInfo: {...}} — must unwrap to a list."""
+        entities = [{"id": 277, "name_uz": "Kompyuter ilmlari"}]
+        payload = {"entities": entities, "pageInfo": {"currentCount": 1, "totalCount": 1}}
+        with aioresponses() as m:
+            m.get(DIRECTIONS_URL, status=200, payload=payload)
+            result = await send_req.directions(self.TOKEN)
+        assert result == entities
 
     async def test_returns_error_dict_on_non_200(self):
         with aioresponses() as m:

@@ -306,6 +306,9 @@ async def directions(token):
             async with session.get(url, headers=default_header) as response:
                 if response.status == 200:
                     data = await response.json()
+                    # API may wrap results in {entities: [...], pageInfo: {...}}
+                    if isinstance(data, dict) and 'entities' in data:
+                        return data['entities']
                     return data
                 else:
                     return {'error': 'Failed to fetch data', 'status_code': response.status}
