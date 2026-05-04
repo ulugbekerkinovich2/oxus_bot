@@ -1687,27 +1687,72 @@ async def has_application(callback_query: types.CallbackQuery, state: FSMContext
                                "Server bilan bog'lanishda xatolik. Iltimos, qayta urinib ko'ring.")
         return
     await state.update_data(directions=direction_response)
-    ic(direction_response)
-    # regions = region_response
+    ic('directions count', len(direction_response))
+    if direction_response:
+        ic('first direction keys', list(direction_response[0].keys()))
     selected_degree_id = data['degree_id']
     ic(degree_id)
-    buttons = [[InlineKeyboardButton(text=item['direction_name_uz'], 
-                                     callback_data=f"d_{item['direction_id']}")] 
-                                     for item in direction_response
-                                       if item['degree_id'] == int(selected_degree_id)]
-    ic(buttons)
+
+    def _direction_id(item):
+        return item.get('id') or item.get('direction_id')
+
+    def _direction_name(item):
+        return (item.get('direction_name_uz')
+                or item.get('name_uz')
+                or item.get('name_ru')
+                or item.get('name_en')
+                or f"Yo'nalish #{_direction_id(item)}")
+
+    buttons = []
+    for item in direction_response:
+        if not isinstance(item, dict):
+            continue
+        if item.get('degree_id') != int(selected_degree_id):
+            continue
+        did = _direction_id(item)
+        if did is None:
+            continue
+        ic('direction', did, _direction_name(item))
+        buttons.append([InlineKeyboardButton(
+            text=_direction_name(item),
+            callback_data=f"direction_{did}",
+        )])
+    ic('buttons built', len(buttons))
     directionMenu = InlineKeyboardMarkup(inline_keyboard=buttons)
     await callback_query.answer()
     await bot.send_message(callback_query.from_user.id, select_direction, reply_markup=directionMenu)
     await EducationData.direction_id.set()
 
-@dp.callback_query_handler(lambda c: c.data.startswith('d_'), state=EducationData.direction_id)
+@dp.callback_query_handler(lambda c: c.data.startswith('direction_'), state=EducationData.direction_id)
 async def region_selection_handler(callback_query: types.CallbackQuery, state: FSMContext):
     data_state = await state.get_data()
-    directions = data_state['directions']
+    directions = data_state.get('directions') or []
+    if not isinstance(directions, list):
+        directions = directions.get('entities', []) if isinstance(directions, dict) else []
     ic(callback_query.data, 'shu keldi')
-    direction_id = callback_query.data.split('d_')[1]
-    direction_name = next(item for item in directions if item['direction_id'] == int(direction_id))['direction_name_uz']
+    try:
+        direction_id = int(callback_query.data.split('direction_', 1)[1])
+    except (IndexError, ValueError):
+        await callback_query.answer("Noto'g'ri tanlov", show_alert=True)
+        return
+
+    def _did(item):
+        return item.get('id') or item.get('direction_id')
+
+    def _dname(item):
+        return (item.get('direction_name_uz')
+                or item.get('name_uz')
+                or item.get('name_ru')
+                or item.get('name_en')
+                or f"Yo'nalish #{_did(item)}")
+
+    matched = next((item for item in directions
+                    if isinstance(item, dict) and _did(item) == direction_id), None)
+    if matched is None:
+        ic('direction not found in state', direction_id)
+        await callback_query.answer("Yo'nalish topilmadi", show_alert=True)
+        return
+    direction_name = _dname(matched)
     ic(callback_query.data, 'yana shu keldi')
     await state.update_data(direction_id=direction_id)
     await callback_query.answer()
