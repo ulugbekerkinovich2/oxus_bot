@@ -301,18 +301,36 @@ def application_form_manual(token,birth_date,birth_place,email,extra_phone,first
 async def directions(token):
     url = f'https://{host}/v1/directions'
     default_header['Authorization'] = f'Bearer {token}'
+    ic('>>> directions GET', url)
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
             async with session.get(url, headers=default_header) as response:
+                raw_text = await response.text()
+                ic('<<< directions status', response.status)
+                ic('<<< directions raw (first 2000 chars)', raw_text[:2000])
                 if response.status == 200:
-                    data = await response.json()
-                    # API may wrap results in {entities: [...], pageInfo: {...}}
-                    if isinstance(data, dict) and 'entities' in data:
-                        return data['entities']
+                    try:
+                        data = await response.json(content_type=None)
+                    except Exception as je:
+                        ic('directions json parse error', str(je))
+                        return {'error': 'Invalid JSON', 'detail': str(je)}
+                    if isinstance(data, dict):
+                        ic('directions response top-level keys', list(data.keys()))
+                        if 'entities' in data:
+                            entities = data.get('entities') or []
+                            ic('directions entities count', len(entities) if isinstance(entities, list) else 'NOT_LIST')
+                            if isinstance(entities, list) and entities and isinstance(entities[0], dict):
+                                ic('directions entities[0] keys', list(entities[0].keys()))
+                            return entities
+                    elif isinstance(data, list):
+                        ic('directions list count', len(data))
+                        if data and isinstance(data[0], dict):
+                            ic('directions list[0] keys', list(data[0].keys()))
                     return data
                 else:
                     return {'error': 'Failed to fetch data', 'status_code': response.status}
     except (asyncio.TimeoutError, aiohttp.ClientError) as e:
+        ic('directions request failed', str(e))
         return {'error': 'Request failed', 'detail': str(e)}
 
 async def applicants(token,is_transfer_student,chat_id_user, degree_id, direction_id, education_language_id, education_type_id, work_experience_document=None):
