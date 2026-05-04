@@ -240,7 +240,7 @@ def application_form(token,birth_date,birth_place,citizenship,extra_phone,first_
         #     }
         # }
         # log_to_json(log_data)
-        response = requests.post(url, headers=default_header, json=body)
+        response = requests.post(url, headers=default_header, json=body, timeout=15)
         return response
     except:
         # log_data = {
@@ -251,7 +251,7 @@ def application_form(token,birth_date,birth_place,citizenship,extra_phone,first_
         #     }
         # }
         # log_to_json(log_data)
-        response = requests.post(url, headers=default_header, json=body)
+        response = requests.post(url, headers=default_header, json=body, timeout=15)
         return response
 
 
@@ -274,7 +274,7 @@ def application_form_manual(token,birth_date,birth_place,email,extra_phone,first
         'third_name': third_name
     }
     (162, body)
-    response = requests.post(url, headers=default_header, json=body)
+    response = requests.post(url, headers=default_header, json=body, timeout=15)
     if response.status_code == 201:
         log_data = {
             'time': datetime.utcnow().isoformat(),
@@ -366,7 +366,7 @@ def update_applicant(token, degree_id, direction_id, education_language_id, educ
             'education_language_id': education_language_id,
             'education_type_id': education_type_id
         }
-        response = requests.patch(url, json=body, headers=headers)
+        response = requests.patch(url, json=body, headers=headers, timeout=15)
         # log_data = {
         #     'time': datetime.utcnow().isoformat(),
         #     'event': 'update_applicant',
@@ -433,7 +433,7 @@ def reset_password(phone, token):
         body = {
             'phone': phone
         }
-        response = requests.post(url, json=body, headers=default_header)
+        response = requests.post(url, json=body, headers=default_header, timeout=15)
         # log_data = {
         #     'time': datetime.utcnow().isoformat(),
         #     'event': 'reset_password',
@@ -461,7 +461,7 @@ def reset_password(phone, token):
 def educations(token):
     url = f"https://{host}/v1/application-forms/educations/"
     default_header['Authorization'] = f'Bearer {token}'
-    response = requests.get(url, headers=default_header)
+    response = requests.get(url, headers=default_header, timeout=15)
     if response.status_code == 200:
         # log_data = {
         #     'time': datetime.utcnow().isoformat(),
@@ -500,7 +500,7 @@ def educations(token):
 def regions(token):
     url = f"https://{host}/v1/application-forms/regions"
     default_header['Authorization'] = f'Bearer {token}'
-    response = requests.get(url, headers=default_header)
+    response = requests.get(url, headers=default_header, timeout=15)
     if response.status_code == 200:
     #     log_data = {
     #         'time': datetime.utcnow().isoformat(),
@@ -537,7 +537,7 @@ def regions(token):
 def districts(token, district_id):
     url = f"https://{host}/v1/application-forms/districts/{district_id}"
     default_header['Authorization'] = f'Bearer {token}'
-    response = requests.get(url, headers=default_header)
+    response = requests.get(url, headers=default_header, timeout=15)
     if response.status_code == 200:
         # log_data = {
         #     'time': datetime.utcnow().isoformat(),
@@ -597,7 +597,7 @@ def upload_file(token, file_name, associated_with, usage):
     #     'associated_with': (None, f'{associated_with}'),
     #     'usage': (None, f'{usage}')
     #     }
-        response = requests.post(url, headers=default_header, files=files)
+        response = requests.post(url, headers=default_header, files=files, timeout=15)
         # log_data = {
         #     'time': datetime.utcnow().isoformat(),
         #     'event': 'upload_file',
@@ -873,7 +873,7 @@ def upload_sertificate(token, filename, f_type):
         #             return data
         #         else:
         #             return {'error': 'Failed to upload sertificate', 'status_code': response.status}
-        response = requests.post(url, json=body, headers=headers)
+        response = requests.post(url, json=body, headers=headers, timeout=15)
         # log_data = {
         #     'time': datetime.utcnow().isoformat(),
         #     'event': 'upload_sertificate',
@@ -917,7 +917,7 @@ def application_forms_for_edu(token,  district_id, education_id, file_, institut
             'src': src
         }
     }
-    response = requests.post(url, json=body, headers=default_header)
+    response = requests.post(url, json=body, headers=default_header, timeout=15)
     if response.status_code == 201:
         # log_data = {
         #     'time': datetime.utcnow().isoformat(),
@@ -966,7 +966,7 @@ def application_forms_for_personal_data(token,  birth_date, birth_place, citizen
             'src': 'manually',
             'third_name': third_name
         }
-        response = requests.post(url, json=body, headers=default_header)
+        response = requests.post(url, json=body, headers=default_header, timeout=15)
         # log_data = {
         #     'time': datetime.utcnow().isoformat(),
         #     'event': 'application_forms_for_personal_data',
@@ -1040,7 +1040,7 @@ def create_user_profile(token,chat_id,first_name,last_name,pin,date,username,uni
         "university_name": university_name
     }
     # ic(body)
-    response = requests.post(url, json=body, headers=header)
+    response = requests.post(url, json=body, headers=header, timeout=15)
     if response.status_code == 201:
         # log_data = {
         #     'time': datetime.utcnow().isoformat(),
@@ -1077,7 +1077,7 @@ def update_user_profile(university_id, chat_id, phone, first_name, last_name, pi
         'university_name': university_id
     }
     # ic(body)
-    response = requests.put(url, json=body)
+    response = requests.put(url, json=body, timeout=15)
     if response.status_code == 200:
         # log_data = {
         #     'time': datetime.utcnow().isoformat(),
