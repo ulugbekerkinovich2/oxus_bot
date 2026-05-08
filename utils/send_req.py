@@ -383,6 +383,86 @@ async def education_types(token, direction_id=None, degree_id=None):
     return filtered
 
 
+_TUITION_CACHE = {}    # cache_key -> (timestamp, list)
+_LANG_CACHE = {}       # cache_key -> (timestamp, list)
+_COMBO_TTL = 600       # seconds
+
+
+async def _get_json_active(url, token, log_label):
+    default_header['Authorization'] = f'Bearer {token}'
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
+            async with session.get(url, headers=default_header) as response:
+                body = await response.text()
+                ic(log_label, response.status, body[:200])
+                if response.status != 200:
+                    return None
+                try:
+                    data = await response.json(content_type=None)
+                except Exception as je:
+                    ic(log_label, 'json error', str(je))
+                    return None
+                if isinstance(data, dict) and 'entities' in data:
+                    return data.get('entities') or []
+                if isinstance(data, list):
+                    return data
+                return []
+    except (asyncio.TimeoutError, aiohttp.ClientError) as e:
+        ic(log_label, 'request failed', str(e))
+        return None
+
+
+async def tuition_fees_combo(token):
+    """Fetch the direction × degree × education_type × language × fee table.
+
+    Tries a few endpoint names; the first one that returns a non-empty
+    list wins, and the result is cached for ~10 minutes."""
+    import time
+    now = time.time()
+    cached = _TUITION_CACHE.get('all')
+    if cached and (now - cached[0]) < _COMBO_TTL:
+        return cached[1]
+
+    candidates = [
+        f"https://{host}/v1/tuition-fees?status=active",
+        f"https://{host}/v1/tuition-fees",
+        f"https://{host}/v1/admission-combinations?status=active",
+        f"https://{host}/v1/admission-combinations",
+        f"https://{host}/v1/applicants/tuition-fees?status=active",
+    ]
+    for url in candidates:
+        items = await _get_json_active(url, token, 'tuition_fees probe')
+        if isinstance(items, list) and items:
+            ic('tuition_fees endpoint chosen', url, 'count', len(items))
+            if isinstance(items[0], dict):
+                ic('tuition_fees first keys', list(items[0].keys()))
+            _TUITION_CACHE['all'] = (now, items)
+            return items
+    return []
+
+
+async def education_languages_catalog(token):
+    """Fetch the language catalog (id → name_uz)."""
+    import time
+    now = time.time()
+    cached = _LANG_CACHE.get('all')
+    if cached and (now - cached[0]) < _COMBO_TTL:
+        return cached[1]
+
+    candidates = [
+        f"https://{host}/v1/education-languages?status=active",
+        f"https://{host}/v1/education-languages",
+        f"https://{host}/v1/application-forms/educations/",
+    ]
+    for url in candidates:
+        items = await _get_json_active(url, token, 'edu_languages probe')
+        if isinstance(items, list) and items:
+            ic('edu_languages endpoint chosen', url, 'count', len(items))
+            _LANG_CACHE['all'] = (now, items)
+            return items
+    return []
+
+
 async def educations_async(token):
     url = f"https://{host}/v1/application-forms/educations/"
     default_header['Authorization'] = f'Bearer {token}'

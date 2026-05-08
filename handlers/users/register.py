@@ -1879,33 +1879,110 @@ async def region_selection_handler(callback_query: types.CallbackQuery, state: F
         await process_education_languages(callback_query, token, direction_id_selected, degree_id_selected, education_type_id_selected)
 
 async def process_education_languages(callback_query, token, direction_id_selected, degree_id_selected, education_type_id_selected):
-    try:
-        direction_id_selected = int(direction_id_selected)
-        degree_id_selected = int(degree_id_selected)
-        education_type_id_selected = int(education_type_id_selected)
-    except (TypeError, ValueError):
-        ic('language filter cast failed',
-           direction_id_selected, degree_id_selected, education_type_id_selected)
-        await callback_query.message.answer("Bu ta'lim shakli uchun til topilmadi")
+    edu_langs = await _resolve_education_languages(
+        token, direction_id_selected, degree_id_selected, education_type_id_selected,
+    )
+    if edu_langs is None:
+        await callback_query.message.answer("Ma'lumotlarni olishda xatolik yuz berdi. Iltimos, keyinroq qayta urinib ko'ring.")
         return
-    ic('language filter params',
-       'dir', direction_id_selected,
-       'deg', degree_id_selected,
-       'edu_type', education_type_id_selected)
-    edu_languages = await _fetch_education_sources(token)
-    ic('language sources count', len(edu_languages))
-    edu_langs = _build_edu_langs(edu_languages, direction_id_selected, degree_id_selected, education_type_id_selected)
-    ic('edu_langs count', len(edu_langs))
     if not edu_langs:
-        if edu_languages and isinstance(edu_languages[0], dict):
-            ic('language source[0] keys', list(edu_languages[0].keys()))
-            ic('language source[0] tuition_fees sample',
-               (edu_languages[0].get('tuition_fees') or [None])[:1])
-        await callback_query.message.answer("Bu ta'lim shakli uchun til topilmadi")
+        await callback_query.message.answer("Bu yo'nalish va ta'lim shakli uchun ta'lim tili topilmadi.")
         return
     buttons = [[InlineKeyboardButton(text=item['name'], callback_data=f"_{item['id']}_{item['tuition_fee']}")] for item in edu_langs]
     languageMenu = InlineKeyboardMarkup(inline_keyboard=buttons)
     await callback_query.message.answer(select_edu_language, reply_markup=languageMenu)
+
+
+async def _resolve_education_languages(token, direction_id, degree_id, education_type_id):
+    """Returns list of {id, name, tuition_fee} or [] if none, or None on transport error."""
+    try:
+        direction_id = int(direction_id)
+        degree_id = int(degree_id)
+        education_type_id = int(education_type_id)
+    except (TypeError, ValueError):
+        ic('language filter cast failed', direction_id, degree_id, education_type_id)
+        return None
+    ic('language filter params', 'dir', direction_id, 'deg', degree_id, 'edu_type', education_type_id)
+
+    combos = await send_req.tuition_fees_combo(token)
+    ic('combo source count', len(combos))
+    if combos and isinstance(combos[0], dict):
+        ic('combo[0] keys', list(combos[0].keys()))
+
+    def _eq_int(val, target):
+        try:
+            return int(val) == target
+        except (TypeError, ValueError):
+            return False
+
+    def _direction_match(item):
+        for k in ('direction_id', 'university_direction_id', 'mt_direction_id'):
+            if k in item and _eq_int(item.get(k), direction_id):
+                return True
+        return False
+
+    filtered = []
+    for it in combos:
+        if not isinstance(it, dict):
+            continue
+        if not _direction_match(it):
+            continue
+        if 'degree_id' in it and not _eq_int(it.get('degree_id'), degree_id):
+            continue
+        if 'education_type_id' in it and not _eq_int(it.get('education_type_id'), education_type_id):
+            continue
+        filtered.append(it)
+    ic('filtered combo count', len(filtered))
+
+    lang_ids = []
+    for it in filtered:
+        lid = it.get('education_language_id') or it.get('language_id')
+        if lid is None:
+            continue
+        try:
+            lid = int(lid)
+        except (TypeError, ValueError):
+            continue
+        if lid not in lang_ids:
+            lang_ids.append(lid)
+    ic('extracted language ids', lang_ids)
+
+    if not lang_ids:
+        return []
+
+    catalog = await send_req.education_languages_catalog(token)
+    ic('language catalog count', len(catalog))
+    name_by_id = {}
+    for item in catalog:
+        if not isinstance(item, dict):
+            continue
+        cid = item.get('id') or item.get('education_language_id')
+        cname = (item.get('education_language_name_uz')
+                 or item.get('name_uz')
+                 or item.get('name_ru')
+                 or item.get('name_en')
+                 or item.get('name'))
+        if cid is not None and cname:
+            try:
+                name_by_id[int(cid)] = cname
+            except (TypeError, ValueError):
+                continue
+
+    fee_by_lang = {}
+    for it in filtered:
+        try:
+            lid = int(it.get('education_language_id') or it.get('language_id'))
+        except (TypeError, ValueError):
+            continue
+        if lid not in fee_by_lang:
+            fee_by_lang[lid] = it.get('tuition_fee') or it.get('fee') or 0
+
+    edu_langs = []
+    for lid in lang_ids:
+        name = name_by_id.get(lid) or f"Til #{lid}"
+        edu_langs.append({'id': lid, 'name': name, 'tuition_fee': fee_by_lang.get(lid, 0)})
+    ic('mapped languages count', len(edu_langs))
+    return edu_langs
 
 
 async def _fetch_education_sources(token):
