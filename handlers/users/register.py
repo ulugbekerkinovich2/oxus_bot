@@ -1835,7 +1835,8 @@ async def region_selection_handler(callback_query: types.CallbackQuery, state: F
         await callback_query.message.answer("Bu yo'nalish bo'yicha ta'lim shakli topilmadi.")
         return
 
-    buttons = [[InlineKeyboardButton(text=item['name'], callback_data=f"e_t_{item['id']}e_t_{item['name']}")] for item in uniq_edu_types]
+    await state.update_data(edu_types_options=uniq_edu_types)
+    buttons = [[InlineKeyboardButton(text=item['name'], callback_data=f"edu_type:{item['id']}")] for item in uniq_edu_types]
     eduTypesMenu = InlineKeyboardMarkup(inline_keyboard=buttons)
     await callback_query.message.answer(select_edu_type, reply_markup=eduTypesMenu)
 
@@ -1843,43 +1844,64 @@ async def region_selection_handler(callback_query: types.CallbackQuery, state: F
  
 
 
-@dp.callback_query_handler(lambda c: c.data.startswith('e_t_'), state=EducationData.education_type)
+@dp.callback_query_handler(lambda c: c.data.startswith('edu_type:'), state=EducationData.education_type)
 async def region_selection_handler(callback_query: types.CallbackQuery, state: FSMContext):
-    edu_type_id_ = callback_query.data.split('e_t_')[1]
-    edu_type_name = callback_query.data.split('e_t_')[2]
     ic(callback_query.data)
-    await state.update_data(education_type=edu_type_id_)
-    selected_mess = f"Tanlangan {edu_type_name}"
+    try:
+        education_type_id_selected = int(callback_query.data.split('edu_type:', 1)[1])
+    except (IndexError, ValueError):
+        await callback_query.answer("Noto'g'ri tanlov", show_alert=True)
+        return
+
     data = await state.get_data()
     token = data['token']
-    education_type_id_selected = int(data['education_type'])
+    edu_types_options = data.get('edu_types_options') or []
+    edu_type_name = next(
+        (it.get('name') for it in edu_types_options
+         if isinstance(it, dict) and it.get('id') == education_type_id_selected),
+        f"Ta'lim shakli #{education_type_id_selected}",
+    )
     direction_id_selected = int(data['direction_id'])
     degree_id_selected = int(data['degree_id'])
-    ic(edu_type_id_, type(edu_type_id_))
-    ic(degree_id_selected, type(degree_id_selected))
     await state.update_data(education_type=education_type_id_selected)
+    selected_mess = f"Tanlangan {edu_type_name}"
+    ic('edu_type selected', education_type_id_selected, edu_type_name)
 
-    if int(direction_id_selected) == 3 and int(edu_type_id_) == 2:
-        ic('keldi 1571')
+    if direction_id_selected == 3 and education_type_id_selected == 2:
         await callback_query.answer()
         await callback_query.message.answer(saved_message+'\n'+selected_mess, parse_mode="HTML")
-        
         await callback_query.message.answer("<a href='https://mehnat.uz/oz'>Mehnatuz</a> saytidan olingan ish tajribasi haqidagi ma’lumotnomani yuklang FAYL KO'RINISHIDA!:", reply_markup=ReplyKeyboardRemove(), parse_mode="HTML")
         await EducationData.work_experience.set()
     else:
-        ic('keldi 1579')
         await callback_query.answer()
         await callback_query.message.answer(saved_message+'\n'+selected_mess, parse_mode="HTML")
-        # await process_education_languages(callback_query, token, direction_id_selected, degree_id_selected, education_type_id_selected)
         await EducationData.education_lang_id.set()
         await process_education_languages(callback_query, token, direction_id_selected, degree_id_selected, education_type_id_selected)
 
 async def process_education_languages(callback_query, token, direction_id_selected, degree_id_selected, education_type_id_selected):
+    try:
+        direction_id_selected = int(direction_id_selected)
+        degree_id_selected = int(degree_id_selected)
+        education_type_id_selected = int(education_type_id_selected)
+    except (TypeError, ValueError):
+        ic('language filter cast failed',
+           direction_id_selected, degree_id_selected, education_type_id_selected)
+        await callback_query.message.answer("Bu ta'lim shakli uchun til topilmadi")
+        return
+    ic('language filter params',
+       'dir', direction_id_selected,
+       'deg', degree_id_selected,
+       'edu_type', education_type_id_selected)
     edu_languages = await _fetch_education_sources(token)
+    ic('language sources count', len(edu_languages))
     edu_langs = _build_edu_langs(edu_languages, direction_id_selected, degree_id_selected, education_type_id_selected)
     ic('edu_langs count', len(edu_langs))
     if not edu_langs:
-        await callback_query.message.answer("Bu yo'nalish bo'yicha ta'lim tili topilmadi.")
+        if edu_languages and isinstance(edu_languages[0], dict):
+            ic('language source[0] keys', list(edu_languages[0].keys()))
+            ic('language source[0] tuition_fees sample',
+               (edu_languages[0].get('tuition_fees') or [None])[:1])
+        await callback_query.message.answer("Bu ta'lim shakli uchun til topilmadi")
         return
     buttons = [[InlineKeyboardButton(text=item['name'], callback_data=f"_{item['id']}_{item['tuition_fee']}")] for item in edu_langs]
     languageMenu = InlineKeyboardMarkup(inline_keyboard=buttons)
