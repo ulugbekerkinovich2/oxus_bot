@@ -1796,20 +1796,42 @@ async def region_selection_handler(callback_query: types.CallbackQuery, state: F
     ic(selected_degree_id)
     ic(selected_direction_id)
     await state.update_data(direction_id=selected_direction_id)
-    edu_types = await _fetch_education_sources(token)
+    edu_types_resp = await send_req.education_types(
+        token,
+        direction_id=selected_direction_id,
+        degree_id=selected_degree_id,
+    )
+    if isinstance(edu_types_resp, dict) and edu_types_resp.get('error'):
+        ic('education_types error', edu_types_resp.get('status_code'), edu_types_resp.get('detail'))
+        await callback_query.message.answer(
+            "Ma'lumotlarni olishda xatolik yuz berdi. Iltimos, keyinroq qayta urinib ko'ring."
+        )
+        return
+    edu_types = edu_types_resp if isinstance(edu_types_resp, list) else []
     ic('edu_types count', len(edu_types), 'selected_dir', selected_direction_id, 'selected_deg', selected_degree_id)
-    uniq_edu_types = _build_uniq_edu_types(edu_types, selected_direction_id, selected_degree_id)
+
+    uniq_edu_types = []
+    seen_ids = set()
+    for it in edu_types:
+        if not isinstance(it, dict):
+            continue
+        et_id = it.get('id') or it.get('education_type_id')
+        if et_id is None or et_id in seen_ids:
+            continue
+        et_name = (it.get('name_uz')
+                   or it.get('education_type_name_uz')
+                   or it.get('name_ru')
+                   or it.get('name_en')
+                   or it.get('name'))
+        if not et_name:
+            continue
+        seen_ids.add(et_id)
+        uniq_edu_types.append({'id': et_id, 'name': et_name})
     ic('uniq_edu_types count', len(uniq_edu_types))
 
     if not uniq_edu_types:
         if edu_types and isinstance(edu_types[0], dict):
             ic('edu_types[0] keys', list(edu_types[0].keys()))
-            ic('edu_types[0] sample direction id fields',
-               edu_types[0].get('direction_id'),
-               edu_types[0].get('id'),
-               edu_types[0].get('university_direction_id'),
-               edu_types[0].get('mt_direction_id'))
-        await send_req.probe_education_types(token, selected_direction_id, selected_degree_id)
         await callback_query.message.answer("Bu yo'nalish bo'yicha ta'lim shakli topilmadi.")
         return
 

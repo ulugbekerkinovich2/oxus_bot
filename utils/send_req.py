@@ -307,65 +307,102 @@ def _mask(s):
     return f"{s[:4]}...{s[-4:]}"
 
 
-async def probe_education_types(token, direction_id, degree_id):
-    default_header['Authorization'] = f'Bearer {token}'
-    candidates = [
-        f"https://{host}/v1/education-types",
-        f"https://{host}/v1/education-types?direction_id={direction_id}&degree_id={degree_id}",
-        f"https://{host}/v1/directions/{direction_id}",
-        f"https://{host}/v1/directions/{direction_id}/education-types",
-        f"https://{host}/v1/directions/{direction_id}/tuition-fees",
-        f"https://{host}/v1/tuition-fees?direction_id={direction_id}&degree_id={degree_id}",
-        f"https://{host}/v1/application-forms/education-types",
-        f"https://{host}/v1/application-forms/education-types?direction_id={direction_id}&degree_id={degree_id}",
-    ]
-    try:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
-            for url in candidates:
-                try:
-                    async with session.get(url, headers=default_header) as r:
-                        body = (await r.text())[:600]
-                        ic('probe', url, r.status, body)
-                except Exception as e:
-                    ic('probe failed', url, str(e))
-    except Exception as e:
-        ic('probe session failed', str(e))
+_EDU_TYPES_CACHE = {}  # cache_key -> (timestamp, list)
+_EDU_TYPES_TTL = 600   # seconds
+
+
+async def education_types(token, direction_id=None, degree_id=None):
+    """Fetch active education types from /v1/education-types?status=active.
+
+    Cached for ~10 minutes (the catalogue rarely changes). When the
+    response items expose direction_id/degree_id-style fields we filter
+    locally; if the API only returns the global catalogue (no per-direction
+    fields) we return the full active list."""
+    import time
+    cache_key = 'all_active'
+    now = time.time()
+    cached = _EDU_TYPES_CACHE.get(cache_key)
+    if cached and (now - cached[0]) < _EDU_TYPES_TTL:
+        items = cached[1]
+    else:
+        url = f"https://{host}/v1/education-types?status=active"
+        default_header['Authorization'] = f'Bearer {token}'
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
+                async with session.get(url, headers=default_header) as response:
+                    if response.status != 200:
+                        body = (await response.text())[:500]
+                        ic('education_types failed', url, response.status, body)
+                        return {'error': True, 'status_code': response.status, 'detail': body}
+                    try:
+                        data = await response.json(content_type=None)
+                    except Exception as je:
+                        ic('education_types json error', str(je))
+                        return {'error': True, 'detail': str(je)}
+                    if isinstance(data, dict) and 'entities' in data:
+                        items = data.get('entities') or []
+                    elif isinstance(data, list):
+                        items = data
+                    else:
+                        items = []
+                    _EDU_TYPES_CACHE[cache_key] = (now, items)
+                    ic('education_types fetched', len(items))
+        except (asyncio.TimeoutError, aiohttp.ClientError) as e:
+            ic('education_types request failed', str(e))
+            return {'error': True, 'detail': str(e)}
+
+    if direction_id is None and degree_id is None:
+        return items
+
+    def _eq(a, b):
+        if a is None or b is None:
+            return None
+        try:
+            return int(a) == int(b)
+        except (TypeError, ValueError):
+            return None
+
+    filtered = []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        item_dir = (it.get('direction_id')
+                    or it.get('university_direction_id')
+                    or it.get('mt_direction_id'))
+        item_deg = it.get('degree_id')
+        if item_dir is None and item_deg is None:
+            filtered.append(it)
+            continue
+        dir_match = _eq(item_dir, direction_id) if direction_id is not None else True
+        deg_match = _eq(item_deg, degree_id) if degree_id is not None else True
+        if dir_match is False or deg_match is False:
+            continue
+        filtered.append(it)
+    if not filtered and items:
+        return items
+    return filtered
 
 
 async def educations_async(token):
     url = f"https://{host}/v1/application-forms/educations/"
     default_header['Authorization'] = f'Bearer {token}'
     try:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
             async with session.get(url, headers=default_header) as response:
-                raw_text = await response.text()
-                ic('educations status', response.status)
-                ic('educations raw (first 3000 chars)', raw_text[:3000])
                 if response.status != 200:
-                    return {'error': 'Failed to fetch data', 'status_code': response.status}
+                    body = (await response.text())[:300]
+                    ic('educations failed', response.status, body)
+                    return {'error': True, 'status_code': response.status}
                 try:
                     data = await response.json(content_type=None)
                 except Exception as je:
-                    ic('educations json parse error', str(je))
-                    return {'error': 'Invalid JSON', 'detail': str(je)}
-                if isinstance(data, dict):
-                    ic('educations top-level keys', list(data.keys()))
-                    if 'entities' in data:
-                        entities = data.get('entities') or []
-                        ic('educations entities count', len(entities) if isinstance(entities, list) else 'NOT_LIST')
-                        if isinstance(entities, list) and entities and isinstance(entities[0], dict):
-                            ic('educations entities[0] keys', list(entities[0].keys()))
-                            ic('educations entities[0] full', entities[0])
-                        return entities
-                elif isinstance(data, list):
-                    ic('educations list count', len(data))
-                    if data and isinstance(data[0], dict):
-                        ic('educations list[0] keys', list(data[0].keys()))
-                        ic('educations list[0] full', data[0])
+                    return {'error': True, 'detail': str(je)}
+                if isinstance(data, dict) and 'entities' in data:
+                    return data.get('entities') or []
                 return data
     except (asyncio.TimeoutError, aiohttp.ClientError) as e:
         ic('educations request failed', str(e))
-        return {'error': 'Request failed', 'detail': str(e)}
+        return {'error': True, 'detail': str(e)}
 
 
 async def directions(token):
